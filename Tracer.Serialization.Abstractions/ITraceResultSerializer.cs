@@ -8,11 +8,4 @@ namespace Tracer.Serialization.Abstractions
         
         void Serialize(TraceResult traceResult, Stream to);
     }
-
-    public enum Format
-    {
-        XML,
-        JSON,
-        YAML
-    }
 }
