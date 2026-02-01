@@ -4,7 +4,7 @@
     {
         public IReadOnlyList<ThreadTraceResult> Threads { get; }
 
-        internal TraceResult(List<ThreadTraceResult> threads)
+        public TraceResult(List<ThreadTraceResult> threads)
         {
             Threads = threads;
         }

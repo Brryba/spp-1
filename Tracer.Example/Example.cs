@@ -1,4 +1,5 @@
 ﻿using Tracer.Core;
+using Tracer.Serialization;
 
 namespace Tracer.Example
 {
@@ -6,90 +7,112 @@ namespace Tracer.Example
     {
         static void Main(string[] args)
         {
-            ITracer tracer = new Core.Tracer();
+            Console.WriteLine("--- Start Tracing (Multi-threaded) ---");
 
-            var foo = new Foo(tracer);
+            ITracer tracer = new Tracer.Core.Tracer();
 
-            for (int i = 0; i < 10; i++)
-            {
-                Thread thread = new Thread(() => 
-                {
-                    foo.MyMethod(); 
-                });
-                thread.Start();
-            }
-            
-            Thread.Sleep(1000);
+            var heavyWorker = new HeavyWorker(tracer);
+            var recursiveWorker = new RecursiveWorker(tracer);
+
+            Thread thread1 = new Thread(heavyWorker.MethodA);
+            thread1.Name = "Heavy-Thread";
+
+            Thread thread2 = new Thread(() => recursiveWorker.Recurse(3)); 
+            thread2.Name = "Recursive-Thread";
+
+            thread1.Start();
+            thread2.Start();
+
+            tracer.StartTrace();
+            heavyWorker.MethodB();
+            tracer.StopTrace();
+
+            thread1.Join();
+            thread2.Join();
 
             TraceResult result = tracer.GetTraceResult();
 
-            PrintResultToConsole(result);
-
-            Console.ReadLine();
-        }
-
-        static void PrintResultToConsole(TraceResult result)
-        {
-            foreach (var thread in result.Threads)
-            {
-                Console.WriteLine($"Thread ID: {thread.ThreadId}, Total Time: {thread.Time}ms");
-                foreach (var method in thread.Methods)
-                {
-                    PrintMethod(method, 1);
-                }
-            }
-        }
-
-        static void PrintMethod(MethodTraceResult method, int indentLevel)
-        {
-            string indent = new string(' ', indentLevel * 4);
-            Console.WriteLine($"{indent}Method: {method.MethodName} ({method.ClassName}), Time: {method.Time}ms");
-
-            foreach (var child in method.Methods)
-            {
-                PrintMethod(child, indentLevel + 1);
-            }
+            Console.WriteLine("\n--- Saving Results ---");
+            
+            var pluginManager = new PluginManager();
+            pluginManager.LoadPlugins();
+            
+            pluginManager.SaveResult(result, "Result", "result");
+            
+            Console.WriteLine("Done. Check the 'Result' folder.");
         }
     }
 
-    public class Foo
+    public class HeavyWorker
     {
         private readonly ITracer _tracer;
-        private readonly Bar _bar;
+        private readonly SubWorker _subWorker;
 
-        public Foo(ITracer tracer)
+        public HeavyWorker(ITracer tracer)
         {
             _tracer = tracer;
-            _bar = new Bar(_tracer);
+            _subWorker = new SubWorker(tracer);
         }
 
-        public void MyMethod()
+        public void MethodA()
         {
             _tracer.StartTrace();
+            Thread.Sleep(50); 
             
-            Thread.Sleep(100); 
+            MethodB(); 
             
-            _bar.InnerMethod();
+            _tracer.StopTrace();
+        }
 
+        public void MethodB()
+        {
+            _tracer.StartTrace();
+            Thread.Sleep(30);
+            
+            _subWorker.OtherMethod(); 
+            
             _tracer.StopTrace();
         }
     }
 
-    public class Bar
+    public class SubWorker
     {
         private readonly ITracer _tracer;
 
-        public Bar(ITracer tracer)
+        public SubWorker(ITracer tracer)
         {
             _tracer = tracer;
         }
 
-        public void InnerMethod()
+        public void OtherMethod()
+        {
+            _tracer.StartTrace();
+            Thread.Sleep(20);
+            Console.WriteLine("Deep work done.");
+            _tracer.StopTrace();
+        }
+    }
+
+    public class RecursiveWorker
+    {
+        private readonly ITracer _tracer;
+
+        public RecursiveWorker(ITracer tracer)
+        {
+            _tracer = tracer;
+        }
+
+        public void Recurse(int depth)
         {
             _tracer.StartTrace();
             
-            Thread.Sleep(50);
+            Thread.Sleep(10);
             
+            if (depth > 0)
+            {
+                Recurse(depth - 1);
+            }
+
             _tracer.StopTrace();
         }
     }
